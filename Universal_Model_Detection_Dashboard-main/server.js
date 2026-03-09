@@ -146,7 +146,7 @@ wss.on('connection', (ws, req) => {
     switch(msg.type) {
       case 'attach':   handleAttach(ws, msg);   break;
       case 'start':    handleStart(ws, msg);     break;
-      case 'stop':     handleStop(ws, msg);      break;
+      case 'stop':     handleStop(ws, msg);     break;
       case 'ping':     ws.send(JSON.stringify({ type: 'pong' })); break;
     }
   });
@@ -180,7 +180,6 @@ function handleStart(ws, msg) {
 
   wsend(ws, { type: 'status', status: 'starting', message: 'Spawning inference process...' });
 
-  // Spawn Python detect.py
   spawnInference(sessionId, session);
 }
 

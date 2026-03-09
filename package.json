@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n web,models -c cyan,magenta \"vite\" \"npm run dev:universal-models\"",
+    "dev:frontend": "vite",
     "dev:universal-models": "PORT=8081 npm --prefix Universal_Model_Detection_Dashboard-main run start",
-    "dev:all": "concurrently -n web,models -c cyan,magenta \"npm run dev\" \"npm run dev:universal-models\"",
+    "dev:all": "npm run dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",

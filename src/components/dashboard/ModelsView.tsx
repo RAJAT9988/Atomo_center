@@ -64,7 +64,6 @@ const ModelsView = () => {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [inputType, setInputType] = useState<InputType | null>(null);
   const [rtspUrl, setRtspUrl] = useState("");
-  const [webcamIndex, setWebcamIndex] = useState("4"); // default Apcare (/dev/video4); laptop often 0
   const [uploadedVideo, setUploadedVideo] = useState<{ filename: string; path: string; originalname: string } | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -76,6 +75,37 @@ const ModelsView = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameImgRef = useRef<HTMLImageElement | null>(null);
+
+  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  function requestWebcam() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: true }).then(
+      (stream) => setWebcamStream(stream),
+      () => {}
+    );
+  }
+
+  useEffect(() => {
+    if (inputType !== "webcam") {
+      webcamStream?.getTracks().forEach((t) => t.stop());
+      setWebcamStream(null);
+    }
+  }, [inputType, webcamStream]);
+
+  useEffect(() => {
+    const v = webcamVideoRef.current;
+    if (v && webcamStream) {
+      v.srcObject = webcamStream;
+      v.play().catch(() => {});
+    }
+    return () => {
+      if (v) v.srcObject = null;
+    };
+  }, [webcamStream]);
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -102,8 +132,7 @@ const ModelsView = () => {
         if (!uploadedVideo) throw new Error("Upload a video file first");
         inputValue = uploadedVideo.path;
       } else if (inputType === "webcam") {
-        // Use /dev/videoN (passed as usb:N)
-        inputValue = `usb:${webcamIndex}`;
+        inputValue = "usb:0";
       }
 
       const r = await fetch(`${apiBase}/api/inference/start`, {
@@ -134,14 +163,22 @@ const ModelsView = () => {
   });
 
   const stopMutation = useMutation({
-    mutationFn: async () => {
-      if (!sessionId) return;
-      await fetch(`${apiBase}/api/inference/stop/${sessionId}`, { method: "POST" });
-      safeWsSend({ type: "stop", sessionId });
+    mutationFn: async (sid: string | null) => {
+      if (!sid) throw new Error("No session to stop");
+      const r = await fetch(`${apiBase}/api/inference/stop/${sid}`, { method: "POST" });
+      if (!r.ok) throw new Error("Failed to stop inference");
+      safeWsSend({ type: "stop", sessionId: sid });
+    },
+    onMutate: () => {
+      setRunning(false);
     },
     onSuccess: () => {
-      setRunning(false);
       setSessionId(null);
+      setStats({});
+    },
+    onError: (err) => {
+      setRunning(true);
+      addLog("error", err instanceof Error ? err.message : "Failed to stop");
     },
   });
 
@@ -152,13 +189,12 @@ const ModelsView = () => {
     if (prev !== null && prev !== selectedModelId) {
       if (sessionId) {
         // Fire and forget; onSuccess will clear running/sessionId
-        stopMutation.mutate();
+        stopMutation.mutate(sessionId);
       }
       setRunning(false);
       setSessionId(null);
       setInputType(null);
       setRtspUrl("");
-      setWebcamIndex("4");
       setUploadedVideo(null);
       setStats({});
       setLogLines([]);
@@ -369,7 +405,10 @@ const ModelsView = () => {
                 <Button
                   variant={inputType === "webcam" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setInputType("webcam")}
+                  onClick={() => {
+                    setInputType("webcam");
+                    requestWebcam();
+                  }}
                 >
                   Webcam
                 </Button>
@@ -412,24 +451,16 @@ const ModelsView = () => {
               )}
 
               {inputType === "webcam" && (
-                <div className="space-y-2">
-                  <label className="text-xs text-muted-foreground">Webcam device index</label>
-                  <select
-                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    value={webcamIndex}
-                    onChange={(e) => setWebcamIndex(e.target.value)}
-                  >
-                    <option value="0">/dev/video0 (laptop)</option>
-                    <option value="1">/dev/video1</option>
-                    <option value="2">/dev/video2</option>
-                    <option value="3">/dev/video3</option>
-                    <option value="4">/dev/video4 (Apcare)</option>
-                    <option value="5">/dev/video5</option>
-                    <option value="6">/dev/video6</option>
-                  </select>
-                  <p className="text-xs text-muted-foreground">
-                    Will run as <span className="font-mono">usb:{webcamIndex}</span>.
-                  </p>
+                <div>
+                  {webcamStream && (
+                    <video
+                      ref={webcamVideoRef}
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full aspect-video max-h-48 rounded-md border border-border bg-black object-contain"
+                    />
+                  )}
                 </div>
               )}
 
@@ -441,7 +472,7 @@ const ModelsView = () => {
                   className="flex-1"
                   variant="destructive"
                   disabled={!running || stopMutation.isPending}
-                  onClick={() => stopMutation.mutate()}
+                  onClick={() => stopMutation.mutate(sessionId)}
                 >
                   Stop
                 </Button>

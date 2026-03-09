@@ -1,4 +1,4 @@
-import { Flame, User, Users, HardHat, Car, Upload, Zap } from "lucide-react";
+import { Flame, User, Users, HardHat, Car, Upload, Zap, PlusCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 type UniversalModel = {
@@ -15,7 +15,7 @@ interface Props {
 const ModelSelector = ({ selected, onSelect }: Props) => {
   const apiBase = import.meta.env.VITE_UMD_API_BASE || "/umd";
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["umd", "models"],
     queryFn: async (): Promise<UniversalModel[]> => {
       const r = await fetch(`${apiBase}/api/models`);
@@ -85,6 +85,17 @@ const ModelSelector = ({ selected, onSelect }: Props) => {
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          className="p-4 rounded-xl border border-dashed border-border bg-muted/20 hover:border-primary/40 hover:bg-muted/40 transition-all duration-200 flex flex-col items-center justify-center gap-2 min-h-[100px]"
+        >
+          <PlusCircle className="w-6 h-6 text-muted-foreground" />
+          <span className="font-medium text-sm text-muted-foreground">
+            {isFetching ? "Loading…" : "Load more models"}
+          </span>
+        </button>
       </div>
     </div>
   );
