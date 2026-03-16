@@ -1,9 +1,9 @@
-{"_id":"DatabaseIdentifier","value":"796dfabb385b2ed7f7b9e7ff8c7743035282aeac38df434c830161aaf07ae0d85d12b8027f218cd97b7ebbabab9bf139"}
-{"_id":"InvitationLinkEncryptionKey","key":"0a4ac96556a062ce19b92fc73f836a8e6a49a91069feba0a19f171e46074e952ad57182b94eb08b1893e5d1aa428c38c646e4d2efb922b8b0630d422a858a4ed7e9fc919cdc4ec407df0ea8e9ee7f18d","time":1773661231885}
-{"_id":"LoginCookieEncryptionKey","key":"7f7d77497e99fa633fc3396c77a8518139a5f3a105b93f780b85645ef05218acaee19627501b6d95be03beafe46d483fb8e15ae5d99d3be48e1ec0b7714ac89f43a08241d1cd931e2f38868238716af4","time":1773661231885}
+{"_id":"DatabaseIdentifier","value":"3eb754b6ac9c48752313e50e8b51ca2b59d0404ff2f566cdbef935957481ef2ffca92f8467694797499dd30d7207ef09"}
+{"_id":"InvitationLinkEncryptionKey","key":"99315848cb51c97bedf7cd6aadc02a250bf364c87d945f8f2f2c66d86c8bffe69eb775fe5c8e0d3bbb9c0ba4e6c484be06ff49c199eb5ba228518f5bf7d8a24483473bf8847bedc8f3ea94439cd6027f","time":1773665784935}
+{"_id":"LoginCookieEncryptionKey","key":"63803bc9dcebea5257fb65cfb8b77955b8e819e678df92f92c4b4b3d4da357b612cfea751e3b5c4e891bb7d223c98c82a72ef86d32ce0e888eb16fe8e75589dfca2dc55419feee5f4fca3bb4f1885b21","time":1773665784935}
 {"_id":"SchemaVersion","value":2}
-{"_id":"dbconfig","version":1,"amtWsEventSecret":"a0e2132b9021379896d9317cce30186f5435854293d70c556e9d27d9702ed68f"}
-{"type":"user","_id":"user//atomo3","name":"atomo3","email":"atomo@gmail.com","creation":1773661250,"login":1773661250,"access":1773661250,"domain":"","siteadmin":4294967295,"salt":"tZWoAFhYIRFHKwSSpCOswnulSEXX4x8mMTvDCho0YsSTq+zB/KrUSfMxJWQFsvzwROggY7WtNqp+fucdrzyVmRtPiQbMcr2JjFl+gmy1UNVZYh/w7MKYaNuGLKT4DRfcvsomEbDmv7XxZy1Il6j7etiwJcJ3JNhDdXmgmwkIkIo=","hash":"mLK/qmm3mD8RVu1GO7FIY70uAesZqOcCAm2tCpsW1aVmlcPLGdzI3s+siEBne1ZrC0ZWDQnR5WhYkDUSZFdsCB0XAlpmjeeHKrM9K0132NC7zdd+UaB3IFb9HB1gfPo2VZPboDfItSM8KP/A9lxrKKKG9SypL6oiEw7hFtGOr5A="}
+{"_id":"dbconfig","version":1,"amtWsEventSecret":"29417c68fbf71887d9764c6ccd72b6ab8eaf191188b5968f0aa12992f4d9a12f"}
+{"type":"user","_id":"user//new","name":"new","email":"new@gmail.com","creation":1773665874,"login":1773665874,"access":1773665874,"domain":"","siteadmin":4294967295,"salt":"Keu+rZr+S2cPKnSUtIsgivFG0SaMqCMSVkC3k0Z3RwFcxobKohxCzFVBRqA7n0J5Ongb6LdaKT+eDxDOm+XoUdaHzVEa+3LcZlj2K0FlK397qBd7Qf6iRRUr7XgAKbXlui3duZ+TXtN7bpt8jgPALOkPR1jK58E22b2xdp1C2UQ=","hash":"71ygfNHeAiqTCMKZaff1KrFO2el3Ln52QucbCONSDRx7ifHkYaHAKz7o6W5Jb1WnrY5A0mVx4UlrJcs0Xyq7fxz1d94GmjSwlaVU92RQIvyDLfPKoDAUeix5j6a6ZN9tmnnnADbO5l4h2dEoun/IBisndJpDzuMUCygABtQ/qnM="}
 {"$$indexCreated":{"fieldName":"type","unique":false,"sparse":false}}
 {"$$indexCreated":{"fieldName":"domain","unique":false,"sparse":false}}
 {"$$indexCreated":{"fieldName":"meshid","unique":false,"sparse":true}}

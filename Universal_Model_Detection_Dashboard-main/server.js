@@ -21,7 +21,6 @@ const { spawn, execSync }  = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const chokidar   = require('chokidar');
 const sqlite3    = require('sqlite3').verbose();
-const bcrypt     = require('bcryptjs');
 
 // ── Try to parse YAML (data.yaml for model metadata) ────────────
 let YAML;
@@ -37,7 +36,7 @@ const UPLOADS_DIR  = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
 const PUBLIC_DIR   = path.join(__dirname, 'public');
 const DETECT_SCRIPT = process.env.DETECT_SCRIPT || path.join(__dirname, 'detect.py');
 const DATA_DIR     = process.env.DATA_DIR || path.join(__dirname, 'data');
-const DB_PATH      = process.env.DB_PATH || path.join(DATA_DIR, 'atomo.db');
+const DB_PATH      = process.env.DB_PATH || path.join(DATA_DIR, 'new.db');
 
 // Ensure dirs exist
 [MODELS_DIR, UPLOADS_DIR, PUBLIC_DIR, DATA_DIR].forEach(d => fs.mkdirSync(d, { recursive: true }));
@@ -70,13 +69,12 @@ db.serialize(() => {
     )
   `);
 
-  // Local users table (for native Atomo auth)
+  // Local users table (username + email only)
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
       email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now'))
     )
   `);
@@ -146,74 +144,82 @@ app.use(express.json());
 app.use('/public', express.static(PUBLIC_DIR));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// ── API: Register local user (SQLite users table) ─────────────────
-app.post('/api/auth/register', (req, res) => {
-  const { email, username, password, confirmPassword } = req.body || {};
-
-  if (!email || !username || !password || !confirmPassword) {
-    return res.status(400).json({ ok: false, message: 'All fields are required' });
-  }
-  if (password !== confirmPassword) {
-    return res.status(400).json({ ok: false, message: 'Passwords do not match' });
+// ── API: Login user (email+username) using SQLite, fallback to MeshCentral ─
+app.post('/api/auth/login', (req, res) => {
+  const { email, username } = req.body || {};
+  if (!email || !username) {
+    return res.status(400).json({ ok: false, message: 'Missing email or username' });
   }
 
   const emailStr = String(email).trim();
   const usernameStr = String(username).trim();
 
-  bcrypt.hash(password, 10, (err, hash) => {
-    if (err) {
-      console.error('Password hash error:', err);
-      return res.status(500).json({ ok: false, message: 'Error creating account' });
-    }
-
-    db.run(
-      `INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)`,
-      [usernameStr, emailStr, hash],
-      function (dbErr) {
-        if (dbErr) {
-          if (dbErr.message.includes('UNIQUE')) {
-            return res.status(409).json({ ok: false, message: 'Username or email already exists' });
-          }
-          console.error('User insert error:', dbErr.message);
-          return res.status(500).json({ ok: false, message: 'Error creating account' });
-        }
-        return res.json({ ok: true, id: this.lastID });
-      }
-    );
-  });
-});
-
-// ── API: Login local user (SQLite users table) ────────────────────
-app.post('/api/auth/login', (req, res) => {
-  const { emailOrUsername, password } = req.body || {};
-  if (!emailOrUsername || !password) {
-    return res.status(400).json({ ok: false, message: 'Missing credentials' });
-  }
-
-  const idStr = String(emailOrUsername).trim();
-
+  // First, try to find the user in the local SQLite users table.
   db.get(
-    `SELECT id, username, email, password_hash FROM users WHERE email = ? OR username = ?`,
-    [idStr, idStr],
+    `SELECT id, username, email FROM users WHERE email = ? AND username = ?`,
+    [emailStr, usernameStr],
     (err, row) => {
       if (err) {
-        console.error('User lookup error:', err.message);
+        console.error('User lookup error (SQLite users):', err.message);
         return res.status(500).json({ ok: false, message: 'Error checking account' });
       }
-      if (!row) {
-        return res.status(401).json({ ok: false, message: 'Invalid credentials' });
-      }
-
-      bcrypt.compare(password, row.password_hash, (cmpErr, same) => {
-        if (cmpErr || !same) {
-          return res.status(401).json({ ok: false, message: 'Invalid credentials' });
-        }
-
+      if (row) {
+        // Found in SQLite users table
         return res.json({
           ok: true,
           user: { id: row.id, username: row.username, email: row.email },
         });
-      });
+      }
+
+      // If not found in SQLite, fall back to MeshCentral NeDB file.
+      try {
+        const nedbPath = path.join(__dirname, '..', 'meshcentral-data', 'meshcentral.db');
+        if (!fs.existsSync(nedbPath)) {
+          return res.status(404).json({ ok: false, message: 'No account found. Please create your account first.' });
+        }
+
+        const lines = fs.readFileSync(nedbPath, 'utf8').split(/\r?\n/).filter(Boolean);
+        let mcUser = null;
+        for (const line of lines) {
+          try {
+            const doc = JSON.parse(line);
+            if (
+              doc.type === 'user' &&
+              typeof doc.name === 'string' &&
+              typeof doc.email === 'string' &&
+              doc.name === usernameStr &&
+              doc.email === emailStr
+            ) {
+              mcUser = doc;
+              break;
+            }
+          } catch {
+            // ignore non-JSON/meta lines
+          }
+        }
+
+        if (!mcUser) {
+          return res.status(404).json({ ok: false, message: 'No account found. Please create your account first.' });
+        }
+
+        // Optionally mirror this MeshCentral user into SQLite users for next time.
+        db.run(
+          `INSERT OR IGNORE INTO users (username, email, password_hash) VALUES (?, ?, ?)`,
+          [usernameStr, emailStr, ''],
+          (insErr) => {
+            if (insErr) {
+              console.error('Failed to mirror MeshCentral user into users table:', insErr.message);
+            }
+            return res.json({
+              ok: true,
+              user: { id: mcUser._id || null, username: mcUser.name, email: mcUser.email },
+            });
+          }
+        );
+      } catch (e) {
+        console.error('Error checking MeshCentral database:', e.message);
+        return res.status(500).json({ ok: false, message: 'Error checking account' });
+      }
     }
   );
 });

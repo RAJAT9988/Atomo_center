@@ -18,14 +18,14 @@ const LoginScreen = ({ onSuccess }: LoginScreenProps) => {
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const emailOrUsername = formData.get("emailOrUsername") as string | null;
-    const password = formData.get("password") as string | null;
+    const email = formData.get("email") as string | null;
+    const username = formData.get("username") as string | null;
 
     try {
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailOrUsername, password }),
+        body: JSON.stringify({ email, username }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -33,7 +33,7 @@ const LoginScreen = ({ onSuccess }: LoginScreenProps) => {
       if (res.ok && data.ok) {
         onSuccess(); // move to device registration step, then dashboard
       } else {
-        window.alert(data.message || "Login failed. Please check your username/email and password.");
+        window.alert(data.message || "Login failed. Please check your email and username.");
       }
     } catch (err) {
       window.alert("Unable to reach authentication server. Please try again.");
@@ -59,23 +59,25 @@ const LoginScreen = ({ onSuccess }: LoginScreenProps) => {
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-secondary-foreground mb-2">
-                Email or username
+                Email
               </label>
               <input
-                name="emailOrUsername"
-                type="text"
-                placeholder="you@company.com or your username"
+                name="email"
+                type="email"
+                placeholder="you@company.com"
                 required
                 className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-secondary-foreground mb-2">Password</label>
+              <label className="block text-sm font-medium text-secondary-foreground mb-2">
+                Username
+              </label>
               <input
-                name="password"
-                type="password"
-                placeholder="••••••••"
+                name="username"
+                type="text"
+                placeholder="your username"
                 required
                 className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
