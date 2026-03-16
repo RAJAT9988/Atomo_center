@@ -20,6 +20,8 @@ const fs         = require('fs');
 const { spawn, execSync }  = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 const chokidar   = require('chokidar');
+const sqlite3    = require('sqlite3').verbose();
+const bcrypt     = require('bcryptjs');
 
 // ── Try to parse YAML (data.yaml for model metadata) ────────────
 let YAML;
@@ -34,9 +36,97 @@ const MODELS_DIR   = process.env.MODELS_DIR  || path.join(__dirname, 'models');
 const UPLOADS_DIR  = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
 const PUBLIC_DIR   = path.join(__dirname, 'public');
 const DETECT_SCRIPT = process.env.DETECT_SCRIPT || path.join(__dirname, 'detect.py');
+const DATA_DIR     = process.env.DATA_DIR || path.join(__dirname, 'data');
+const DB_PATH      = process.env.DB_PATH || path.join(DATA_DIR, 'atomo.db');
 
 // Ensure dirs exist
-[MODELS_DIR, UPLOADS_DIR, PUBLIC_DIR].forEach(d => fs.mkdirSync(d, { recursive: true }));
+[MODELS_DIR, UPLOADS_DIR, PUBLIC_DIR, DATA_DIR].forEach(d => fs.mkdirSync(d, { recursive: true }));
+
+// ── SQLite (device registrations + users mirror + local users) ────
+const db = new sqlite3.Database(DB_PATH);
+db.serialize(() => {
+  // Device registrations (existing)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS device_registrations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      serial TEXT NOT NULL,
+      device_name TEXT,
+      org_name TEXT,
+      email TEXT,
+      phone TEXT,
+      location TEXT,
+      cloud_sync INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // MeshCentral users mirror table (for easy app access)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS mesh_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      email TEXT NOT NULL,
+      UNIQUE(username, email)
+    )
+  `);
+
+  // Local users table (for native Atomo auth)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+});
+
+// ── Sync MeshCentral NeDB users into SQLite mesh_users ────────────
+function syncMeshUsersFromNeDB() {
+  try {
+    const nedbPath = path.join(__dirname, '..', 'meshcentral-data', 'meshcentral.db');
+    if (!fs.existsSync(nedbPath)) {
+      console.warn('[auth] meshcentral.db not found, skipping user sync.');
+      return;
+    }
+
+    const lines = fs.readFileSync(nedbPath, 'utf8').split(/\r?\n/).filter(Boolean);
+    const users = [];
+    for (const line of lines) {
+      try {
+        const doc = JSON.parse(line);
+        if (doc.type === 'user' && typeof doc.name === 'string' && typeof doc.email === 'string') {
+          users.push({ username: doc.name, email: doc.email });
+        }
+      } catch {
+        // ignore non-JSON/meta lines
+      }
+    }
+
+    if (users.length === 0) {
+      console.warn('[auth] No user entries found in meshcentral.db during sync.');
+      return;
+    }
+
+    db.serialize(() => {
+      const stmt = db.prepare(
+        `INSERT OR IGNORE INTO mesh_users (username, email) VALUES (?, ?)`
+      );
+      users.forEach((u) => {
+        stmt.run(u.username, u.email);
+      });
+      stmt.finalize();
+    });
+
+    console.log(`[auth] Synced ${users.length} MeshCentral user(s) into SQLite mesh_users.`);
+  } catch (err) {
+    console.error('[auth] Failed to sync MeshCentral users:', err.message);
+  }
+}
+
+// Perform an initial sync on startup
+syncMeshUsersFromNeDB();
 
 // ── Active inference sessions ────────────────────────────────────
 const sessions = new Map();  // sessionId -> { proc, ws, type }
@@ -55,6 +145,78 @@ const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 * 1024 } })
 app.use(express.json());
 app.use('/public', express.static(PUBLIC_DIR));
 app.use('/uploads', express.static(UPLOADS_DIR));
+
+// ── API: Register local user (SQLite users table) ─────────────────
+app.post('/api/auth/register', (req, res) => {
+  const { email, username, password, confirmPassword } = req.body || {};
+
+  if (!email || !username || !password || !confirmPassword) {
+    return res.status(400).json({ ok: false, message: 'All fields are required' });
+  }
+  if (password !== confirmPassword) {
+    return res.status(400).json({ ok: false, message: 'Passwords do not match' });
+  }
+
+  const emailStr = String(email).trim();
+  const usernameStr = String(username).trim();
+
+  bcrypt.hash(password, 10, (err, hash) => {
+    if (err) {
+      console.error('Password hash error:', err);
+      return res.status(500).json({ ok: false, message: 'Error creating account' });
+    }
+
+    db.run(
+      `INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)`,
+      [usernameStr, emailStr, hash],
+      function (dbErr) {
+        if (dbErr) {
+          if (dbErr.message.includes('UNIQUE')) {
+            return res.status(409).json({ ok: false, message: 'Username or email already exists' });
+          }
+          console.error('User insert error:', dbErr.message);
+          return res.status(500).json({ ok: false, message: 'Error creating account' });
+        }
+        return res.json({ ok: true, id: this.lastID });
+      }
+    );
+  });
+});
+
+// ── API: Login local user (SQLite users table) ────────────────────
+app.post('/api/auth/login', (req, res) => {
+  const { emailOrUsername, password } = req.body || {};
+  if (!emailOrUsername || !password) {
+    return res.status(400).json({ ok: false, message: 'Missing credentials' });
+  }
+
+  const idStr = String(emailOrUsername).trim();
+
+  db.get(
+    `SELECT id, username, email, password_hash FROM users WHERE email = ? OR username = ?`,
+    [idStr, idStr],
+    (err, row) => {
+      if (err) {
+        console.error('User lookup error:', err.message);
+        return res.status(500).json({ ok: false, message: 'Error checking account' });
+      }
+      if (!row) {
+        return res.status(401).json({ ok: false, message: 'Invalid credentials' });
+      }
+
+      bcrypt.compare(password, row.password_hash, (cmpErr, same) => {
+        if (cmpErr || !same) {
+          return res.status(401).json({ ok: false, message: 'Invalid credentials' });
+        }
+
+        return res.json({
+          ok: true,
+          user: { id: row.id, username: row.username, email: row.email },
+        });
+      });
+    }
+  );
+});
 
 // ── API: List available models ───────────────────────────────────
 app.get('/api/models', (req, res) => {
@@ -89,7 +251,53 @@ app.get('/api/system', (req, res) => {
     const raw = execSync("hostname -I 2>/dev/null || ip addr show | grep 'inet ' | awk '{print $2}' | cut -d/ -f1").toString().trim();
     ip = raw.split(/\s+/).filter(Boolean);
   } catch(e){}
-  res.json({ arch, hostname, ip, port: PORT, uptime: process.uptime() });
+  res.json({ arch, hostname, ip, port: PORT, uptime: process.uptime(), dbPath: DB_PATH });
+});
+
+// ── API: Register device (store in SQLite) ───────────────────────
+app.post('/api/device/register', (req, res) => {
+  const {
+    serial,
+    deviceName,
+    orgName,
+    email,
+    phone,
+    location,
+    cloudSync
+  } = req.body || {};
+
+  if (!serial) return res.status(400).json({ error: 'serial is required' });
+
+  db.run(
+    `INSERT INTO device_registrations (serial, device_name, org_name, email, phone, location, cloud_sync)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      String(serial),
+      deviceName ? String(deviceName) : null,
+      orgName ? String(orgName) : null,
+      email ? String(email) : null,
+      phone ? String(phone) : null,
+      location ? String(location) : null,
+      cloudSync ? 1 : 0,
+    ],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ ok: true, id: this.lastID });
+    }
+  );
+});
+
+// ── API: List device registrations ───────────────────────────────
+app.get('/api/device/registrations', (req, res) => {
+  db.all(
+    `SELECT id, serial, device_name as deviceName, org_name as orgName, email, phone, location, cloud_sync as cloudSync, created_at as createdAt
+     FROM device_registrations
+     ORDER BY id DESC`,
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ registrations: rows || [] });
+    }
+  );
 });
 
 // ── API: Start inference session ─────────────────────────────────

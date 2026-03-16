@@ -1,0 +1,17 @@
+{"_id":"DatabaseIdentifier","value":"796dfabb385b2ed7f7b9e7ff8c7743035282aeac38df434c830161aaf07ae0d85d12b8027f218cd97b7ebbabab9bf139"}
+{"_id":"InvitationLinkEncryptionKey","key":"0a4ac96556a062ce19b92fc73f836a8e6a49a91069feba0a19f171e46074e952ad57182b94eb08b1893e5d1aa428c38c646e4d2efb922b8b0630d422a858a4ed7e9fc919cdc4ec407df0ea8e9ee7f18d","time":1773661231885}
+{"_id":"LoginCookieEncryptionKey","key":"7f7d77497e99fa633fc3396c77a8518139a5f3a105b93f780b85645ef05218acaee19627501b6d95be03beafe46d483fb8e15ae5d99d3be48e1ec0b7714ac89f43a08241d1cd931e2f38868238716af4","time":1773661231885}
+{"_id":"SchemaVersion","value":2}
+{"_id":"dbconfig","version":1,"amtWsEventSecret":"a0e2132b9021379896d9317cce30186f5435854293d70c556e9d27d9702ed68f"}
+{"type":"user","_id":"user//atomo3","name":"atomo3","email":"atomo@gmail.com","creation":1773661250,"login":1773661250,"access":1773661250,"domain":"","siteadmin":4294967295,"salt":"tZWoAFhYIRFHKwSSpCOswnulSEXX4x8mMTvDCho0YsSTq+zB/KrUSfMxJWQFsvzwROggY7WtNqp+fucdrzyVmRtPiQbMcr2JjFl+gmy1UNVZYh/w7MKYaNuGLKT4DRfcvsomEbDmv7XxZy1Il6j7etiwJcJ3JNhDdXmgmwkIkIo=","hash":"mLK/qmm3mD8RVu1GO7FIY70uAesZqOcCAm2tCpsW1aVmlcPLGdzI3s+siEBne1ZrC0ZWDQnR5WhYkDUSZFdsCB0XAlpmjeeHKrM9K0132NC7zdd+UaB3IFb9HB1gfPo2VZPboDfItSM8KP/A9lxrKKKG9SypL6oiEw7hFtGOr5A="}
+{"$$indexCreated":{"fieldName":"type","unique":false,"sparse":false}}
+{"$$indexCreated":{"fieldName":"domain","unique":false,"sparse":false}}
+{"$$indexCreated":{"fieldName":"meshid","unique":false,"sparse":true}}
+{"$$indexCreated":{"fieldName":"nodeid","unique":false,"sparse":true}}
+{"$$indexCreated":{"fieldName":"email","unique":false,"sparse":true}}
+{"$$indexCreated":{"fieldName":"type"}}
+{"$$indexCreated":{"fieldName":"domain"}}
+{"$$indexCreated":{"fieldName":"meshid","sparse":true}}
+{"$$indexCreated":{"fieldName":"nodeid","sparse":true}}
+{"$$indexCreated":{"fieldName":"email","sparse":true}}
+{"_id":"SchemaVersion","value":2}

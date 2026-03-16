@@ -78,15 +78,17 @@ const ModelsView = () => {
 
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
   const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
+  const webcamRafRef = useRef<number | null>(null);
 
-  function requestWebcam() {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      return;
+  async function requestWebcam(): Promise<MediaStream | null> {
+    if (!navigator.mediaDevices?.getUserMedia) return null;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setWebcamStream(stream);
+      return stream;
+    } catch {
+      return null;
     }
-    navigator.mediaDevices.getUserMedia({ video: true }).then(
-      (stream) => setWebcamStream(stream),
-      () => {}
-    );
   }
 
   useEffect(() => {
@@ -106,6 +108,47 @@ const ModelsView = () => {
       if (v) v.srcObject = null;
     };
   }, [webcamStream]);
+
+  // Draw local webcam preview into the main Live Output canvas (when not running inference)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const video = webcamVideoRef.current;
+
+    const stop = () => {
+      if (webcamRafRef.current) {
+        cancelAnimationFrame(webcamRafRef.current);
+        webcamRafRef.current = null;
+      }
+    };
+
+    if (!canvas || !video || inputType !== "webcam" || !webcamStream || running) {
+      stop();
+      return;
+    }
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      stop();
+      return;
+    }
+
+    const loop = () => {
+      // Wait until we have actual video frames
+      if (video.readyState >= 2) {
+        const w = video.videoWidth || 640;
+        const h = video.videoHeight || 480;
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+      webcamRafRef.current = requestAnimationFrame(loop);
+    };
+
+    webcamRafRef.current = requestAnimationFrame(loop);
+    return stop;
+  }, [inputType, webcamStream, running]);
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -132,6 +175,10 @@ const ModelsView = () => {
         if (!uploadedVideo) throw new Error("Upload a video file first");
         inputValue = uploadedVideo.path;
       } else if (inputType === "webcam") {
+        if (!webcamStream) {
+          const s = await requestWebcam();
+          if (!s) throw new Error("Camera permission denied");
+        }
         inputValue = "usb:0";
       }
 
@@ -405,10 +452,7 @@ const ModelsView = () => {
                 <Button
                   variant={inputType === "webcam" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => {
-                    setInputType("webcam");
-                    requestWebcam();
-                  }}
+                  onClick={() => setInputType("webcam")}
                 >
                   Webcam
                 </Button>
@@ -451,17 +495,8 @@ const ModelsView = () => {
               )}
 
               {inputType === "webcam" && (
-                <div>
-                  {webcamStream && (
-                    <video
-                      ref={webcamVideoRef}
-                      autoPlay
-                      muted
-                      playsInline
-                      className="w-full aspect-video max-h-48 rounded-md border border-border bg-black object-contain"
-                    />
-                  )}
-                </div>
+                // Hidden element used as the capture source for Live Output canvas preview.
+                <video ref={webcamVideoRef} autoPlay muted playsInline className="hidden" />
               )}
 
               <div className="flex gap-2 pt-2">

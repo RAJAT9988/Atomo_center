@@ -1,0 +1,10 @@
+{
+  "settings": {
+    "cert": "localhost",
+    "port": 443,
+    "redirPort": 81,
+    "sqlite3": {
+      "name": "meshcentral-db"
+    }
+  }
+}

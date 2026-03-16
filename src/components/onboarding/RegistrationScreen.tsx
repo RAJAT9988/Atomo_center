@@ -6,16 +6,41 @@ interface RegistrationScreenProps {
 }
 
 const RegistrationScreen = ({ onSuccess }: RegistrationScreenProps) => {
+  const apiBase = import.meta.env.VITE_UMD_API_BASE || "/umd";
   const [cloudSync, setCloudSync] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const fd = new FormData(e.currentTarget);
+      const payload = {
+        serial: String(fd.get("serial") || "").trim(),
+        deviceName: String(fd.get("deviceName") || "").trim(),
+        orgName: String(fd.get("orgName") || "").trim(),
+        email: String(fd.get("email") || "").trim(),
+        phone: String(fd.get("phone") || "").trim(),
+        location: String(fd.get("location") || "").trim(),
+        cloudSync,
+      };
+
+      const r = await fetch(`${apiBase}/api/device/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = (await r.json()) as { ok?: boolean; id?: number; error?: string };
+      if (!r.ok) throw new Error(j.error || "Failed to register device");
+
       setLoading(false);
       onSuccess();
-    }, 1500);
+    } catch (err) {
+      setLoading(false);
+      setError(err instanceof Error ? err.message : "Failed to register device");
+    }
   };
 
   return (
@@ -38,6 +63,7 @@ const RegistrationScreen = ({ onSuccess }: RegistrationScreenProps) => {
               <div className="flex gap-2">
                 <input
                   type="text"
+                  name="serial"
                   placeholder="APU-XXXX-XXXX-XXXX"
                   defaultValue="APU-2026-E7K3-9F1A"
                   className="flex-1 px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono text-sm"
@@ -52,6 +78,7 @@ const RegistrationScreen = ({ onSuccess }: RegistrationScreenProps) => {
               <label className="block text-sm font-medium text-secondary-foreground mb-2">Device Name</label>
               <input
                 type="text"
+                name="deviceName"
                 placeholder="e.g., Factory Floor Unit 1"
                 className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
@@ -61,6 +88,7 @@ const RegistrationScreen = ({ onSuccess }: RegistrationScreenProps) => {
               <label className="block text-sm font-medium text-secondary-foreground mb-2">Organization Name</label>
               <input
                 type="text"
+                name="orgName"
                 placeholder="Your company or team name"
                 className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
@@ -71,6 +99,7 @@ const RegistrationScreen = ({ onSuccess }: RegistrationScreenProps) => {
                 <label className="block text-sm font-medium text-secondary-foreground mb-2">Email</label>
                 <input
                   type="email"
+                  name="email"
                   placeholder="admin@company.com"
                   className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 />
@@ -79,6 +108,7 @@ const RegistrationScreen = ({ onSuccess }: RegistrationScreenProps) => {
                 <label className="block text-sm font-medium text-secondary-foreground mb-2">Phone</label>
                 <input
                   type="tel"
+                  name="phone"
                   placeholder="+91 XXXXX XXXXX"
                   className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 />
@@ -91,6 +121,7 @@ const RegistrationScreen = ({ onSuccess }: RegistrationScreenProps) => {
               </label>
               <input
                 type="text"
+                name="location"
                 placeholder="City, State"
                 className="w-full px-4 py-3 rounded-lg bg-muted border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
               />
@@ -132,6 +163,8 @@ const RegistrationScreen = ({ onSuccess }: RegistrationScreenProps) => {
               </button>
             </div>
           </form>
+
+          {error && <p className="mt-4 text-xs text-destructive">{error}</p>}
         </div>
       </div>
     </div>
